@@ -1,6 +1,6 @@
 A Peggle-inspired arcade game developed in C++ using SDL2. 
 This project demonstrates object-oriented programming, wrapper functionality, collision detection, game state management, audio integration, HUD rendering, and gameplay system design.
-
+```
 FIEAPeggleClone/
 │
 ├── Assets/
@@ -36,3 +36,4 @@ FIEAPeggleClone/
     ├── SDL2/               # SDL2 dependencies
     ├── SDL_ttf/            # Font rendering library
     └── SDL_mixer/          # Audio playback library
+```

@@ -4,6 +4,7 @@
 
 #include <stdexcept>
 
+// initializes the renderer; creates an SDL_Renderer associated with the provided window
 Renderer::Renderer(Window& window)
 {
     m_renderer = SDL_CreateRenderer(
@@ -12,6 +13,7 @@ Renderer::Renderer(Window& window)
         SDL_RENDERER_ACCELERATED
     );
 
+	// check if the renderer was created successfully
     if (m_renderer == nullptr)
     {
         throw std::runtime_error(SDL_GetError());
@@ -44,6 +46,7 @@ void Renderer::DrawPoint(int x, int y)
     SDL_RenderDrawPoint(m_renderer, x, y);
 }
 
+// plays a sound effect on the first available audio channel; used for gameplay feedback such as peg hits, launcher shots, and free balls
 void Renderer::DrawCircle(int centerX, int centerY, int radius)
 {
 

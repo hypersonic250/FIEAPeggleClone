@@ -7,22 +7,26 @@
 
 Bucket::Bucket()
 {
+	// spawn the bucket at the bottom center of the screen
     m_position = Vector2(640.0f, 690.0f);
 }
 
 void Bucket::Update()
 {
+	//moves the bucket horizontally across the screen at a fixed speed; reverses direction when it reaches the edges of the screen
     m_position.x +=
         m_speed *
         m_direction *
         Time::DeltaTime();
 
+	// reverse direction when hitting the left edge
     if (m_position.x < m_width / 2.0f)
     {
         m_position.x = m_width / 2.0f;
         m_direction = 1;
     }
 
+	// reverse direction when hitting the right edge
     if (m_position.x > 1280 - m_width / 2.0f)
     {
         m_position.x = 1280 - m_width / 2.0f;
@@ -54,6 +58,7 @@ void Bucket::Render(Renderer& renderer)
         renderer.GetNativeRenderer(),
         &rect);
 
+	//render side walls to visually ressemble classic peckle bucket design; purely aesthetic
     SDL_Rect leftWall;
     leftWall.x = rect.x;
     leftWall.y = rect.y - 20;

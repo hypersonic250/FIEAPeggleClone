@@ -4,21 +4,25 @@
 
 Peg::Peg(float x, float y, PegType type)
 {
+	//store the peg's position and type; initialize it as unlit
     m_position = Vector2(x, y);
     m_type = type;
 }
 
 void Peg::Render(Renderer& renderer)
 {
+	//pegs marked as hit have been removed from the board and should not be rendered
     if (m_hit)
     {
         return;
     }
 
+    //determine the peg's color based on both its type and whether it has been struck during the current turn
     switch (m_type)
     {
     case PegType::Blue:
 
+		// lit pegs are brighter than unlit ones to show that they have been hit during the current turn
         if (m_isLit)
         {
             renderer.SetColor(100, 180, 255);
@@ -63,6 +67,7 @@ void Peg::Render(Renderer& renderer)
         break;
     }
 
+	//draw the peg as a filled circle at its position; called from the main render loop
     renderer.DrawCircle(
         static_cast<int>(m_position.x),
         static_cast<int>(m_position.y),
@@ -77,6 +82,7 @@ bool Peg::IsHit() const
 
 void Peg::SetHit(bool hit)
 {
+    // marks a peg as permanently removed from the board 
     m_hit = hit;
 }
 
@@ -97,6 +103,7 @@ PegType Peg::GetType() const
 
 void Peg::SetType(PegType type)
 {
+	// allows gameplay systems to change a peg's role (e.g., turning a blue peg into an orange one); also used to place special pegs like the purple and green ones
     m_type = type;
 }
 
@@ -107,5 +114,6 @@ bool Peg::IsLit() const
 
 void Peg::SetLit(bool lit)
 {
+	// marks a peg as lit, which visually indicates that it has been hit during the current turn; this is reset at the end of each turn
     m_isLit = lit;
 }

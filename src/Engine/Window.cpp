@@ -13,6 +13,7 @@ Window::Window(const std::string& title, int width, int height)
         SDL_WINDOW_SHOWN
     );
 
+	// check if the window was created successfully
     if (m_window == nullptr)
     {
         throw std::runtime_error(SDL_GetError());

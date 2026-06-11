@@ -36,7 +36,7 @@ Mix_Chunk* freeBallSound = nullptr;
 
 
 
-
+// initializes the audio system; prepares SDL_mixer for playback
 void HandlePegHit(
     
     Peg& peg,
@@ -50,6 +50,7 @@ void HandlePegHit(
     bool& multiballActive,
     Ball& ball,
     Ball& multiball)
+
 
 
 {
@@ -146,8 +147,118 @@ void HandlePegHit(
 	ball.BounceOffPeg(peg.GetPosition());
 
 }
+// used for gameplay feedback such as peg hits, launcher shots, and free balls
+void ResetGame(
+    std::vector<Peg>& pegs,
+    Ball& ball,
+    Ball& multiball,
+    int& score,
+    int& turnScore,
+    int& pegsHitThisTurn,
+    int& ballsRemaining,
+    int& nextFreeBallScore,
+    int& orangePegsRemaining,
+    bool& feverMode,
+    bool& gameWon,
+    bool& gameLost,
+    bool& ballReady,
+    bool& multiballActive)
+
+{
+	// reset pegs
+    std::cout << "RESTARTING..." << std::endl;
+
+    score = 0;
+    turnScore = 0;
+    pegsHitThisTurn = 0;
+    ballsRemaining = 10;
+    nextFreeBallScore = 25000;
+
+    feverMode = false;
+    gameWon = false;
+    gameLost = false;
+    ballReady = true;
+    multiballActive = false;
+
+    ball.Reset();
+    multiball.Reset();
+
+    pegs.clear();
+
+	// add pegs to the game world
+    for (int row = 0; row < 10; row++)
+    {
+        int pegCount = (row % 2 == 0) ? 12 : 13;
+
+        float startX = (row % 2 == 0) ? 240.0f : 200.0f;
+        float y = 140.0f + row * 50.0f;
+
+        for (int col = 0; col < pegCount; col++)
+        {
+            float x = startX + col * 80.0f;
+
+            pegs.emplace_back(
+                x,
+                y,
+                PegType::Blue);
+        }
+    }
+
+    const int orangeCount = 25;
+
+    int orangesPlaced = 0;
+
+	// randomly place orange pegs
+    while (orangesPlaced < orangeCount)
+    {
+        int index = std::rand() % pegs.size();
+
+        if (pegs[index].GetType() == PegType::Blue)
+        {
+            pegs[index].SetType(PegType::Orange);
+            orangesPlaced++;
+        }
+    }
+
+    orangePegsRemaining = 0;
+
+	// count how many orange pegs are on the board
+    for (const Peg& peg : pegs)
+    {
+        if (peg.GetType() == PegType::Orange)
+        {
+            orangePegsRemaining++;
+        }
+    }
+
+	// place the purple peg in a random location
+    int purpleIndex = std::rand() % pegs.size();
 
 
+	// ensure the purple peg isn't placed on top of an orange peg
+    while (pegs[purpleIndex].GetType() != PegType::Blue)
+    {
+        purpleIndex = std::rand() % pegs.size();
+    }
+
+    pegs[purpleIndex].SetType(PegType::Purple);
+
+    int greenIndex = std::rand() % pegs.size();
+
+	// ensure the green peg isn't placed on top of an orange or purple peg
+    while (greenIndex == purpleIndex ||
+        pegs[greenIndex].GetType() != PegType::Blue)
+    {
+        greenIndex = std::rand() % pegs.size();
+    }
+
+    pegs[greenIndex].SetType(PegType::Green);
+
+    std::cout << "GAME RESTARTED" << std::endl;
+    std::cout << "Orange Count = " << orangePegsRemaining << std::endl;
+}
+
+// initializes the audio system; prepares SDL_mixer for playback
 int main(int argc, char* argv[])
 {
     if (SDL_Init(SDL_INIT_VIDEO) != 0)
@@ -168,9 +279,7 @@ int main(int argc, char* argv[])
 
     Mix_Chunk* multiballSound = audio.LoadSound("../../../assets/Audio/PeggleMultiball.wav");
 
-
-
-
+	Mix_Chunk* launcherSound = audio.LoadSound("../../../assets/Audio/PeggleLauncher.wav");
 
     bool running = true;
 
@@ -186,6 +295,7 @@ int main(int argc, char* argv[])
 
     HUD hud;
 
+	// game state variables
     if (!hud.Initialize())
     {
         std::cout<< "HUD initialization failed!"<< std::endl;
@@ -209,6 +319,7 @@ int main(int argc, char* argv[])
 
     std::vector<Peg> pegs;
 
+	// start the first game
     for (int row = 0; row < 10; row++)
     {
         int pegCount = (row % 2 == 0) ? 12 : 13;
@@ -230,6 +341,7 @@ int main(int argc, char* argv[])
 
     int orangesPlaced = 0;
 
+	// randomly place orange pegs
     while (orangesPlaced < orangeCount)
     {
         int index = std::rand() % pegs.size();
@@ -245,6 +357,7 @@ int main(int argc, char* argv[])
 
     int orangePegsRemaining = 0;
 
+	// count how many orange pegs are on the board
     for (const Peg& peg : pegs)
     {
         if (peg.GetType() == PegType::Orange)
@@ -258,6 +371,7 @@ int main(int argc, char* argv[])
 
     int greenIndex = std::rand() % pegs.size();
 
+	// ensure the green peg isn't placed on top of an orange or purple peg
     while (greenIndex == purpleIndex)
     {
         greenIndex = std::rand() % pegs.size();
@@ -269,10 +383,12 @@ int main(int argc, char* argv[])
 
     SDL_Event event;
 
+	// main game loop
     while (running)
     {
         Time::Update();
 
+		// handle events
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_QUIT)
@@ -280,140 +396,63 @@ int main(int argc, char* argv[])
                 running = false;
             }
 
+			// handle mouse click to launch the ball
             if (event.type == SDL_MOUSEBUTTONDOWN &&
                 event.button.button == SDL_BUTTON_LEFT)
             {
-                if (ballReady)
+                if (ballReady && !gameWon && !gameLost)
                 {
                     int mouseX;
                     int mouseY;
 
-                    SDL_GetMouseState(
-                        &mouseX,
-                        &mouseY
-                    );
+                    SDL_GetMouseState(&mouseX, &mouseY);
 
                     Vector2 direction =
                         Vector2(
                             static_cast<float>(mouseX),
-                            static_cast<float>(mouseY)
-                        )
+                            static_cast<float>(mouseY))
                         - ball.GetPosition();
 
-                    direction =
-                        direction.Normalized();
+                    direction = direction.Normalized();
 
                     ball.Launch(direction * 600.0f);
+
+                    audio.PlaySound(launcherSound);
 
                     ballReady = false;
                 }
             }
 
-
+			// handle spacebar to reset the game after a win or loss
             if (event.type == SDL_KEYDOWN)
             {
                 if (event.key.keysym.sym == SDLK_r)
                 {
-                    std::cout << "RESTARTING..." << std::endl;
-
-                    score = 0;
-
-                    ballsRemaining = 10;
-
-                    nextFreeBallScore = 25000;
-
-                    feverMode = false;
-
-                    gameWon = false;
-
-                    gameLost = false;
-
-                    ballReady = true;
-
-                    multiballActive = false;
-
-                    ball.Reset();
-
-                    multiball.Reset();
-
-                    pegs.clear();
-
-                    for (int row = 0; row < 10; row++)
-                    {
-                        int pegCount = (row % 2 == 0) ? 12 : 13;
-
-                        float startX = (row % 2 == 0) ? 240.0f : 200.0f;
-                        float y = 140.0f + row * 50.0f;
-
-                        for (int col = 0; col < pegCount; col++)
-                        {
-                            float x = startX + col * 80.0f;
-
-                            PegType type = PegType::Blue;
-
-                            pegs.emplace_back(x, y, type);
-                        }
-
-                    }
-
-                    const int orangeCount = 25;
-
-                    int orangesPlaced = 0;
-
-                    while (orangesPlaced < orangeCount)
-                    {
-                        int index = std::rand() % pegs.size();
-
-                        if (pegs[index].GetType() == PegType::Blue)
-                        {
-                            pegs[index].SetType(
-                                PegType::Orange);
-
-                            orangesPlaced++;
-                        }
-                    }
-
-                    orangePegsRemaining = 0;
-
-                    for (const Peg& peg : pegs)
-                    {
-                        if (peg.GetType() == PegType::Orange)
-                        {
-                            orangePegsRemaining++;
-                        }
-                    }
-
-                    int purpleIndex = std::rand() % pegs.size();
-
-                    while (pegs[purpleIndex].GetType() != PegType::Blue)
-                    {
-                        purpleIndex = std::rand() % pegs.size();
-                    }
-
-                    pegs[purpleIndex].SetType(PegType::Purple);
-
-                    int greenIndex = std::rand() % pegs.size();
-
-                    while (greenIndex == purpleIndex || pegs[greenIndex].GetType() != PegType::Blue)
-                    {
-                        greenIndex = std::rand() % pegs.size();
-                    }
-
-                    pegs[greenIndex].SetType(PegType::Green);
-
-                    std::cout << "GAME RESTARTED" << std::endl;
-
-                    std::cout << "Orange Count = " << orangePegsRemaining << std::endl;
+                    ResetGame(
+                        pegs,
+                        ball,
+                        multiball,
+                        score,
+                        turnScore,
+                        pegsHitThisTurn,
+                        ballsRemaining,
+                        nextFreeBallScore,
+                        orangePegsRemaining,
+                        feverMode,
+                        gameWon,
+                        gameLost,
+                        ballReady,
+                        multiballActive
+                    );
                 }
-
             }
-
         }
 
 
 
         renderer.Clear();
 
+		// update and render pegs
         if (feverMode)
         {
             renderer.SetColor(80, 0, 0);
@@ -455,6 +494,7 @@ int main(int argc, char* argv[])
             )
             - launcherPosition;
 
+		// draw the launcher direction line
         direction = direction.Normalized();
 
         Vector2 barrelEnd =
@@ -470,75 +510,45 @@ int main(int argc, char* argv[])
             static_cast<int>(barrelEnd.y)
         );
 
+		// render pegs
         if (!gameWon && !gameLost)
         {
             ball.Update();
 
+            // check for collisions with pegs
             if (multiballActive)
             {
-                 multiball.Update();
+                multiball.Update();
             }
-
-         if (multiballActive && multiball.IsOutOfBounds())
+		
+            if (multiballActive && multiball.IsOutOfBounds())
             {
                 multiballActive = false;
             }
-    
-        bucket.Update();
 
-        Vector2 bucketPosition = bucket.GetPosition();
+            bucket.Update();
 
-        float left =
-            bucketPosition.x - bucket.GetWidth() / 2.0f;
+            Vector2 bucketPosition = bucket.GetPosition();
 
-        float right =
-            bucketPosition.x + bucket.GetWidth() / 2.0f;
+            float left =
+                bucketPosition.x - bucket.GetWidth() / 2.0f;
 
-        float top =
-            bucketPosition.y - bucket.GetHeight() / 2.0f;
+            float right =
+                bucketPosition.x + bucket.GetWidth() / 2.0f;
 
-        float ballX = ball.GetPosition().x;
-        float ballY = ball.GetPosition().y;
+            float top =
+                bucketPosition.y - bucket.GetHeight() / 2.0f;
 
-        float ballRadius = ball.GetRadius();
+            float ballX = ball.GetPosition().x;
+            float ballY = ball.GetPosition().y;
 
-        if (ballX >= left &&
-            ballX <= right &&
-            ballY >= top &&
-            ballY <= bucketPosition.y)
-        {
-            ballsRemaining++;
+            float ballRadius = ball.GetRadius();
 
-            audio.PlaySound(
-                bucketSound);
-
-            std::cout
-                << "FREE BALL CATCH!"
-                << std::endl;
-
-            if (feverMode)
-            {
-                std::cout << "YOU WIN!" << std::endl;
-            }
-            else
-            {
-                ball.Reset();
-                ballReady = true;
-            }
-        }
-
-        if (multiballActive)
-        {
-            float multiballX =
-                multiball.GetPosition().x;
-
-            float multiballY =
-                multiball.GetPosition().y;
-
-            if (multiballX >= left &&
-                multiballX <= right &&
-                multiballY >= top &&
-                multiballY <= bucketPosition.y)
+			// check for collision with bucket
+            if (ballX >= left &&
+                ballX <= right &&
+                ballY >= top &&
+                ballY <= bucketPosition.y)
             {
                 ballsRemaining++;
 
@@ -546,202 +556,160 @@ int main(int argc, char* argv[])
                     bucketSound);
 
                 std::cout
-                    << "MULTIBALL FREE BALL!"
+                    << "FREE BALL CATCH!"
                     << std::endl;
 
-                multiballActive = false;
-
-                multiball.Reset();
-            }
-        }
-
-        if (ball.IsOutOfBounds())
-        {
-            ballsRemaining--;
-
-            std::cout
-                << "Balls Remaining: "
-                << ballsRemaining
-                << std::endl;
-
-            if (ballsRemaining <= 0)
-            {
-                std::cout << "GAME OVER" << std::endl;
-
-                gameLost = true;
-                ballReady = false;
-            }
-
-            else
-            {
-                for (Peg& peg : pegs)
+                if (feverMode)
                 {
-                    if (peg.IsLit())
-                    {
-                        peg.SetHit(true);
-                    }
-                }
-
-                score += turnScore * pegsHitThisTurn;
-
-                std::cout << "Turn Score: " << turnScore * pegsHitThisTurn << std::endl;
-
-                turnScore = 0;
-                pegsHitThisTurn = 0;
-
-                if (orangePegsRemaining <= 0)
-                {
-                    std::cout << std::endl;
                     std::cout << "YOU WIN!" << std::endl;
-                    std::cout << "FINAL SCORE: "
-                        << score
-                        << std::endl;
-                    std::cout << std::endl;
+                }
+                else
+                {
+                    ball.Reset();
+                    ballReady = true;
+                }
+            }
+            
+			// check for collisions with pegs
+            if (multiballActive)
+            {
+                float multiballX =
+                    multiball.GetPosition().x;
 
-                    gameWon = true;
+                float multiballY =
+                    multiball.GetPosition().y;
+
+				// check for collision with bucket
+                if (multiballX >= left &&
+                    multiballX <= right &&
+                    multiballY >= top &&
+                    multiballY <= bucketPosition.y)
+                {
+                    ballsRemaining++;
+
+                    audio.PlaySound(
+                        bucketSound);
+
+                    std::cout
+                        << "MULTIBALL FREE BALL!"
+                        << std::endl;
+
+                    multiballActive = false;
+
+                    multiball.Reset();
+                }
+            }
+
+			// check for collisions with pegs
+            if (ball.IsOutOfBounds())
+            {
+                ballsRemaining--;
+
+                std::cout
+                    << "Balls Remaining: "
+                    << ballsRemaining
+                    << std::endl;
+
+				// check for game over
+                if (ballsRemaining <= 0)
+                {
+                    std::cout << "GAME OVER" << std::endl;
+
+                    gameLost = true;
                     ballReady = false;
                 }
 
-                score += turnScore * pegsHitThisTurn;
-
-                for (Peg& peg : pegs)
+				// reset the ball for the next turn
+                else
                 {
-                    if (peg.IsLit())
+                    for (Peg& peg : pegs)
                     {
-                        peg.SetHit(true);
+                        if (peg.IsLit())
+                        {
+                            peg.SetHit(true);
+                        }
                     }
-                }
 
-                turnScore = 0;
-                pegsHitThisTurn = 0;
+                    score += turnScore * pegsHitThisTurn;
 
-                for (Peg& peg : pegs)
-                {
-                    if (peg.IsLit())
+                    std::cout << "Turn Score: " << turnScore * pegsHitThisTurn << std::endl;
+
+                    turnScore = 0;
+                    pegsHitThisTurn = 0;
+
+					// reset pegs for the next turn
+                    if (orangePegsRemaining <= 0)
                     {
-                        peg.SetHit(true);
+                        std::cout << std::endl;
+                        std::cout << "YOU WIN!" << std::endl;
+                        std::cout << "FINAL SCORE: "
+                            << score
+                            << std::endl;
+                        std::cout << std::endl;
+
+                        gameWon = true;
+                        ballReady = false;
                     }
-                }
 
-                score += turnScore * pegsHitThisTurn;
+                    score += turnScore * pegsHitThisTurn;
 
-                std::cout
-                    << "Turn Score: "
-                    << turnScore * pegsHitThisTurn
-                    << std::endl;
+					// reset pegs for the next turn
+                    for (Peg& peg : pegs)
+                    {
+                        if (peg.IsLit())
+                        {
+                            peg.SetHit(true);
+                        }
+                    }
 
-                turnScore = 0;
-                pegsHitThisTurn = 0;
+                    turnScore = 0;
+                    pegsHitThisTurn = 0;
 
-                ball.Reset();
-                ballReady = true;
+					// reset the ball for the next turn
+                    for (Peg& peg : pegs)
+                    {
+                        if (peg.IsLit())
+                        {
+                            peg.SetHit(true);
+                        }
+                    }
 
-                int oldPurple = FindPurplePegIndex(pegs);
+                    score += turnScore * pegsHitThisTurn;
 
-                if (oldPurple >= 0)
-                {
-                    pegs[oldPurple].SetType(PegType::Blue);
-                }
+                    std::cout
+                        << "Turn Score: "
+                        << turnScore * pegsHitThisTurn
+                        << std::endl;
 
-                int newPurple = std::rand() % pegs.size();
+                    turnScore = 0;
+                    pegsHitThisTurn = 0;
 
-                while (
-                    pegs[newPurple].IsHit() ||
-                    pegs[newPurple].IsLit()
-                    )
-                {
-                    newPurple = std::rand() % pegs.size();
-                }
-                pegs[newPurple].SetType(PegType::Purple);
-            }
-        }
+                    ball.Reset();
+                    ballReady = true;
 
+                    int oldPurple = FindPurplePegIndex(pegs);
 
-        for (Peg& peg : pegs)
-        {
-            if (peg.IsHit())
-            {
-                continue;
-            }
+					// check for purple peg hit
+                    if (oldPurple >= 0)
+                    {
+                        pegs[oldPurple].SetType(PegType::Blue);
+                    }
 
-            Vector2 difference =
-                ball.GetPosition() - peg.GetPosition();
+                    int newPurple = std::rand() % pegs.size();
 
-            float distanceSquared =
-                difference.x * difference.x +
-                difference.y * difference.y;
-
-            float radiusSum =
-                ball.GetRadius() + peg.GetRadius();
-
-            if (distanceSquared <= radiusSum * radiusSum)
-            {
-                ball.BounceOffPeg(
-                    peg.GetPosition()
-                );
-
-                Vector2 normal =
-                    (ball.GetPosition() -
-                        peg.GetPosition()).Normalized();
-
-                float separation =
-                    ball.GetRadius() +
-                    peg.GetRadius();
-
-                ball.SetPosition(
-                    peg.GetPosition() +
-                    normal * separation
-                );
-
-                audio.PlaySound(pegHitSound);
-
-                PegType hitType = peg.GetType();
-
-                HandlePegHit(
-                    peg,
-                    score,
-                    turnScore,
-                    pegsHitThisTurn,
-                    orangePegsRemaining,
-                    ballsRemaining,
-                    nextFreeBallScore,
-                    feverMode,
-                    multiballActive,
-                    ball,
-                    multiball
-                );
-
-
-
-
-
-                if (hitType == PegType::Green &&
-                    !multiballActive)
-                {
-                    audio.PlaySound(
-                        multiballSound);
-
-                    multiballActive = true;
-
-                    multiball.SetPosition(
-                        ball.GetPosition());
-
-                    Vector2 velocity =
-                        ball.GetVelocity();
-
-                    velocity.x *= -1.0f;
-
-                    multiball.SetVelocity(
-                        velocity);
+					// ensure the new purple peg is not the same as the old one
+                    while (
+                        pegs[newPurple].IsHit() ||
+                        pegs[newPurple].IsLit()
+                        )
+                    {
+                        newPurple = std::rand() % pegs.size();
+                    }
+                    pegs[newPurple].SetType(PegType::Purple);
                 }
             }
-        }
 
-        
-
-        //duplicate, for multiball
-        if (multiballActive)
-        {
+			// render pegs
             for (Peg& peg : pegs)
             {
                 if (peg.IsHit())
@@ -750,21 +718,38 @@ int main(int argc, char* argv[])
                 }
 
                 Vector2 difference =
-                    multiball.GetPosition() -
-                    peg.GetPosition();
+                    ball.GetPosition() - peg.GetPosition();
 
                 float distanceSquared =
                     difference.x * difference.x +
                     difference.y * difference.y;
 
                 float radiusSum =
-                    multiball.GetRadius() +
-                    peg.GetRadius();
+                    ball.GetRadius() + peg.GetRadius();
 
+				// check for collision with peg
                 if (distanceSquared <= radiusSum * radiusSum)
                 {
+                    ball.BounceOffPeg(
+                        peg.GetPosition()
+                    );
+
+                    Vector2 normal =
+                        (ball.GetPosition() -
+                            peg.GetPosition()).Normalized();
+
+                    float separation =
+                        ball.GetRadius() +
+                        peg.GetRadius();
+
+                    ball.SetPosition(
+                        peg.GetPosition() +
+                        normal * separation
+                    );
 
                     audio.PlaySound(pegHitSound);
+
+                    PegType hitType = peg.GetType();
 
                     HandlePegHit(
                         peg,
@@ -776,63 +761,161 @@ int main(int argc, char* argv[])
                         nextFreeBallScore,
                         feverMode,
                         multiballActive,
-                        multiball,
+                        ball,
                         multiball
                     );
+
+
+
+
+					// if the hit peg was orange, check for fever mode activation
+                    if (hitType == PegType::Green &&
+                        !multiballActive)
+                    {
+                        audio.PlaySound(
+                            multiballSound);
+
+                        multiballActive = true;
+
+                        multiball.SetPosition(
+                            ball.GetPosition());
+
+                        Vector2 velocity =
+                            ball.GetVelocity();
+
+                        velocity.x *= -1.0f;
+
+                        multiball.SetVelocity(
+                            velocity);
+                    }
                 }
             }
+
+
+            //duplicate, for multiball
+            if (multiballActive)
+            {
+                for (Peg& peg : pegs)
+                {
+                    if (peg.IsHit())
+                    {
+                        continue;
+                    }
+
+                    Vector2 difference =
+                        multiball.GetPosition() -
+                        peg.GetPosition();
+
+                    float distanceSquared =
+                        difference.x * difference.x +
+                        difference.y * difference.y;
+
+                    float radiusSum =
+                        multiball.GetRadius() +
+                        peg.GetRadius();
+
+                    if (distanceSquared <= radiusSum * radiusSum)
+                    {
+
+                        audio.PlaySound(pegHitSound);
+
+                        HandlePegHit(
+                            peg,
+                            score,
+                            turnScore,
+                            pegsHitThisTurn,
+                            orangePegsRemaining,
+                            ballsRemaining,
+                            nextFreeBallScore,
+                            feverMode,
+                            multiballActive,
+                            multiball,
+                            multiball
+                        );
+                    }
+                }
+            }
+
         }
 
+		// render the game state
+        for (Peg& peg : pegs)
+        {
+            peg.Render(renderer);
+        }
+
+		// render the ball
+        if (ballReady)
+        {
+            int mouseX;
+            int mouseY;
+
+            SDL_GetMouseState(
+                &mouseX,
+                &mouseY
+            );
+
+            renderer.SetColor(
+                0,
+                255,
+                255
+            );
+
+            renderer.DrawLine(
+                static_cast<int>(ball.GetPosition().x),
+                static_cast<int>(ball.GetPosition().y),
+                mouseX,
+                mouseY
+            );
+        }
+
+        ball.Render(renderer);
+
+		// render multiball if active
+        if (multiballActive)
+        {
+            multiball.Render(renderer);
+        }
+
+        bucket.Render(renderer);
+
+		// render score and other info
+        if (!gameWon && !gameLost)
+        {
+            hud.Render(
+                renderer,
+                score,
+                turnScore,
+                ballsRemaining,
+                orangePegsRemaining
+            );
+        }
+        
+		// present the rendered frame
+        if (gameWon)
+        {
+            hud.RenderCenterMessage(
+                renderer,
+                "YOU WIN!\nFINAL SCORE: " +
+                std::to_string(score) +
+                "\nPRESS R TO TRY AGAIN!"
+            );
+        }
+
+		// render game over message if lost
+        if (gameLost)
+        {
+            hud.RenderCenterMessage(
+                renderer,
+                "GAME OVER\nFINAL SCORE: " +
+                std::to_string(score) +
+                "\nPRESS R TO TRY AGAIN!"
+            );
+        }
+
+        renderer.Present();
+
     }
-
-    for (Peg& peg : pegs)
-    {
-        peg.Render(renderer);
-    }
-
-    if (ballReady)
-    {
-        int mouseX;
-        int mouseY;
-
-        SDL_GetMouseState(
-            &mouseX,
-            &mouseY
-        );
-
-        renderer.SetColor(
-            0,
-            255,
-            255
-        );
-
-        renderer.DrawLine(
-            static_cast<int>(ball.GetPosition().x),
-            static_cast<int>(ball.GetPosition().y),
-            mouseX,
-            mouseY
-        );
-    }
-
-    ball.Render(renderer);
-
-    if (multiballActive)
-    {
-        multiball.Render(renderer);
-    }
-
-    bucket.Render(renderer);
-
-    hud.Render(
-        renderer,
-        score,
-        turnScore,
-        ballsRemaining,
-        orangePegsRemaining
-    );
-
-    renderer.Present();
-
         SDL_Quit();
 
         return 0;

@@ -15,6 +15,7 @@ public:
 
     bool Initialize();
 
+	// renders the player's current score, turn score, balls remaining, and orange pegs remaining
     void Render(
         Renderer& renderer,
         int score,

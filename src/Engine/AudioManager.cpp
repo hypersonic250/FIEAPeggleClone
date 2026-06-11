@@ -14,6 +14,8 @@ bool AudioManager::Initialize()
     return true;
 }
 
+// loads a WAV sound file from disk 
+// returns a pointer that can be played later
 Mix_Chunk* AudioManager::LoadSound(
     const std::string& path)
 {
@@ -21,6 +23,8 @@ Mix_Chunk* AudioManager::LoadSound(
         path.c_str());
 }
 
+// plays a sound effect on the first available audio channel 
+// used for gameplay feedbacksuch as peg hits, launcher shots, and free balls
 void AudioManager::PlaySound(
     Mix_Chunk* sound)
 {
